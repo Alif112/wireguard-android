@@ -19,6 +19,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"unsafe"
+	
 
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/conn"
@@ -74,7 +75,7 @@ func init() {
 
 //export wgTurnOn
 func wgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
-	tag := cstring("WireGuard/GoBackend/" + interfaceName)
+	tag := cstring("WireGuard/GoBackend/tunnel/" + interfaceName)
 	logger := &device.Logger{
 		Verbosef: AndroidLogger{level: C.ANDROID_LOG_DEBUG, tag: tag}.Printf,
 		Errorf:   AndroidLogger{level: C.ANDROID_LOG_ERROR, tag: tag}.Printf,
@@ -88,9 +89,12 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
 	}
 
 	logger.Verbosef("Attaching to interface %v", name)
+	logger.Verbosef("tunnel fd %v", tunFd)
+
 	device := device.NewDevice(tun, conn.NewStdNetBind(), logger)
 
 	err = device.IpcSet(settings)
+	logger.Verbosef("settings of the interface---------------------------\n %v", settings)
 	if err != nil {
 		unix.Close(int(tunFd))
 		logger.Errorf("IpcSet: %v", err)
@@ -104,7 +108,9 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
 	if err != nil {
 		logger.Errorf("UAPIOpen: %v", err)
 	} else {
+		logger.Verbosef("UapiFile------------ %v",uapiFile)
 		uapi, err = ipc.UAPIListen(name, uapiFile)
+		logger.Verbosef("UAPI value------------ %v",uapi)
 		if err != nil {
 			uapiFile.Close()
 			logger.Errorf("UAPIListen: %v", err)
@@ -112,6 +118,7 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
 			go func() {
 				for {
 					conn, err := uapi.Accept()
+					logger.Verbosef("conn ------------ %v",conn)
 					if err != nil {
 						return
 					}
@@ -161,6 +168,12 @@ func wgTurnOff(tunnelHandle int32) {
 
 //export wgGetSocketV4
 func wgGetSocketV4(tunnelHandle int32) int32 {
+	tag := cstring("WireGuard/GoBackend/tunnel/socketv4:")
+	logger := &device.Logger{
+		Verbosef: AndroidLogger{level: C.ANDROID_LOG_DEBUG, tag: tag}.Printf,
+		Errorf:   AndroidLogger{level: C.ANDROID_LOG_ERROR, tag: tag}.Printf,
+	}
+
 	handle, ok := tunnelHandles[tunnelHandle]
 	if !ok {
 		return -1
@@ -173,11 +186,17 @@ func wgGetSocketV4(tunnelHandle int32) int32 {
 	if err != nil {
 		return -1
 	}
+	logger.Verbosef("fd ------------ %v",fd)
 	return int32(fd)
 }
 
 //export wgGetSocketV6
 func wgGetSocketV6(tunnelHandle int32) int32 {
+	tag := cstring("WireGuard/GoBackend/tunnel/socketv6:")
+	logger := &device.Logger{
+		Verbosef: AndroidLogger{level: C.ANDROID_LOG_DEBUG, tag: tag}.Printf,
+		Errorf:   AndroidLogger{level: C.ANDROID_LOG_ERROR, tag: tag}.Printf,
+	}
 	handle, ok := tunnelHandles[tunnelHandle]
 	if !ok {
 		return -1
@@ -190,6 +209,7 @@ func wgGetSocketV6(tunnelHandle int32) int32 {
 	if err != nil {
 		return -1
 	}
+	logger.Verbosef("fd ------------ %v",fd)
 	return int32(fd)
 }
 
@@ -203,6 +223,7 @@ func wgGetConfig(tunnelHandle int32) *C.char {
 	if err != nil {
 		return nil
 	}
+	
 	return C.CString(settings)
 }
 
